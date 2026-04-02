@@ -158,7 +158,7 @@ def parse_record(page):
     p   = page.get("properties",{})
     kit = get_select(p,"キット") or get_rich_text(p,"キット")
     # バケット: number/rich_text/select/formula すべてに対応
-    bv = get_bucket_value(p, "バケット")   # float or None
+    bv = get_bucket_value(p, "バケットサイズ")   # float or None
 
     if bv is not None:
         try:
@@ -523,13 +523,13 @@ def main():
 
     records = [parse_record(r) for r in raw]
 
-    # ── 検索UI: メーカー／バケット／機種名 を独立セレクト＋テキスト ──
+
+    # ── 検索UI: メーカー／バケットサイズ／機種名（各条件独立）──
     col_maker, col_bucket, col_search, col_btn = st.columns([2, 1.8, 2.5, 1])
 
     makers = sorted({r["maker"] for r in records if r.get("maker")})
 
-    # バケットサイズ: bucket_num（float）で正確にソート
-    # label→num の逆引きマップを作成
+    # バケットサイズ一覧: Notionの "バケットサイズ" プロパティの数値を昇順で並べる
     bucket_label_to_num = {
         r["bucket"]: r["bucket_num"]
         for r in records
@@ -540,37 +540,17 @@ def main():
         key=lambda x: bucket_label_to_num.get(x, 0.0),
     )
 
-    # ── デバッグ情報（バケット取得に問題があるとき用）──
-    with st.sidebar:
-        st.markdown("### 🔧 デバッグ情報")
-        st.write(f"総レコード数: {len(records)}")
-        bucket_filled = [r for r in records if r.get("bucket")]
-        st.write(f"バケット取得数: {len(bucket_filled)} / {len(records)}")
-        if bucket_set:
-            st.write("バケット一覧:", bucket_set)
-        else:
-            st.warning("バケット値が取得できていません。Notionのプロパティ名・型を確認してください。")
-            # 最初の1件のプロパティキー一覧を表示
-            if raw:
-                first_props = list(raw[0].get("properties", {}).keys())
-                st.write("Notionのプロパティ名一覧:", first_props)
-                # バケット候補プロパティの型を表示
-                for key in first_props:
-                    prop = raw[0]["properties"][key]
-                    if prop.get("type") in ("number","rich_text","select","formula"):
-                        st.write(f"  {key!r}: type={prop['type']!r}, raw={str(prop)[:120]}")
-
     with col_maker:
         selected_maker = st.selectbox("🏭 メーカー", ["すべて"] + makers)
     with col_bucket:
-        selected_bucket = st.selectbox("🪣 バケット (m³)", ["すべて"] + bucket_set)
+        selected_bucket = st.selectbox("🪣 バケットサイズ (m³)", ["すべて"] + bucket_set)
     with col_search:
         search_query = st.text_input("🔍 機種名で検索", placeholder="例: PC200, ZX135...")
     with col_btn:
         st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
         if st.button("🔄 更新"): force_refresh()
 
-    # 3条件 AND フィルタ（それぞれ独立に機能）
+    # 3条件 AND フィルタ（各条件は単独でも組み合わせでも使用可能）
     filtered = records
     if selected_maker != "すべて":
         filtered = [r for r in filtered if r.get("maker") == selected_maker]
@@ -579,6 +559,7 @@ def main():
     if search_query.strip():
         q = search_query.strip().lower()
         filtered = [r for r in filtered if q in r.get("model", "").lower()]
+
 
     st.markdown(
         '<div class="result-count">📋 '+str(len(filtered))+' 件の実績</div>',
