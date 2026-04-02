@@ -118,14 +118,27 @@ def get_files_prop(p,k):
 def parse_record(page):
     p   = page.get("properties",{})
     kit = get_select(p,"キット") or get_rich_text(p,"キット")
-    bv  = get_number(p,"バケット")
+    bv  = get_number(p,"バケット")   # 数値そのまま（例: 0.1）
+
+    # 表示用ラベル: Notionの数値をそのまま文字列化（0.10→"0.1"、1.0→"1"）
+    if bv != "":
+        try:
+            fv = float(bv)
+            bucket_label = (str(int(fv)) if fv == int(fv) else
+                            str(fv).rstrip("0").rstrip(".")) + " m³"
+        except Exception:
+            bucket_label = str(bv) + " m³"
+    else:
+        bucket_label = ""
+
     return {
-        "id":          page["id"],
-        "maker":       get_select(p,"メーカー"),
-        "model":       get_title(p,"機種名"),
-        "bucket":      (str(bv)+" m3") if bv!="" else "",
-        "specs":       get_multi_select(p,"車体仕様"),
-        "photos_prop": get_files_prop(p,"実績写真"),
+        "id":           page["id"],
+        "maker":        get_select(p,"メーカー"),
+        "model":        get_title(p,"機種名"),
+        "bucket":       bucket_label,
+        "bucket_num":   float(bv) if bv != "" else None,
+        "specs":        get_multi_select(p,"車体仕様"),
+        "photos_prop":  get_files_prop(p,"実績写真"),
         "ict":{
             "レトロ":       get_checkbox(p,"レトロ"),
             "杭ナビショベル": get_checkbox(p,"杭ナビショベル"),
@@ -471,29 +484,32 @@ def main():
 
     records = [parse_record(r) for r in raw]
 
-    col_maker, col_bucket, col_search, col_btn = st.columns([2, 1.5, 2.5, 1])
+    # ── 検索UI: メーカー／バケット／機種名 を独立セレクト＋テキスト ──
+    col_maker, col_bucket, col_search, col_btn = st.columns([2, 1.8, 2.5, 1])
 
     makers = sorted({r["maker"] for r in records if r.get("maker")})
 
-    # バケットサイズ一覧（数値順ソート）
-    def _bucket_sort_key(x):
-        try: return float(x.replace(" m3", ""))
-        except: return 0.0
+    # バケットサイズ: Notionの実際の数値をそのまま昇順で並べる
     bucket_set = sorted(
         {r["bucket"] for r in records if r.get("bucket")},
-        key=_bucket_sort_key,
+        key=lambda x: (
+            float(x.replace(" m³", "").replace(" m3", ""))
+            if x.replace(" m³", "").replace(" m3", "").replace(".", "", 1).isdigit()
+            else 0.0
+        ),
     )
 
     with col_maker:
-        selected_maker = st.selectbox("メーカー", ["すべて"] + makers)
+        selected_maker = st.selectbox("🏭 メーカー", ["すべて"] + makers)
     with col_bucket:
-        selected_bucket = st.selectbox("バケット", ["すべて"] + bucket_set)
+        selected_bucket = st.selectbox("🪣 バケット (m³)", ["すべて"] + bucket_set)
     with col_search:
-        search_query = st.text_input("機種名で検索", placeholder="例: PC200, ZX135...")
+        search_query = st.text_input("🔍 機種名で検索", placeholder="例: PC200, ZX135...")
     with col_btn:
         st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
         if st.button("🔄 更新"): force_refresh()
 
+    # 3条件 AND フィルタ（それぞれ独立に機能）
     filtered = records
     if selected_maker != "すべて":
         filtered = [r for r in filtered if r.get("maker") == selected_maker]
@@ -501,7 +517,7 @@ def main():
         filtered = [r for r in filtered if r.get("bucket") == selected_bucket]
     if search_query.strip():
         q = search_query.strip().lower()
-        filtered = [r for r in filtered if q in r.get("model","").lower()]
+        filtered = [r for r in filtered if q in r.get("model", "").lower()]
 
     st.markdown(
         '<div class="result-count">📋 '+str(len(filtered))+' 件の実績</div>',
