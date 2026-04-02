@@ -2,16 +2,12 @@
 ICT施工・取付実績カタログアプリ
 Notion APIをDBとして使用するStreamlitアプリ
 notion-client ライブラリを使わず requests で直接APIを叩く設計。
-Notion-Version: 2022-06-28 を固定することでAPIの破壊的変更を回避。
 """
 
 import streamlit as st
 import requests
 from datetime import datetime
 
-# ─────────────────────────────────────────
-# ページ設定
-# ─────────────────────────────────────────
 st.set_page_config(
     page_title="ICT実績カタログ",
     page_icon="🏗️",
@@ -19,9 +15,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ─────────────────────────────────────────
-# カスタムCSS
-# ─────────────────────────────────────────
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Barlow+Condensed:wght@600;800&display=swap');
@@ -44,20 +37,37 @@ html, body, .stApp { background: #0f1117 !important; color: #e8eaed !important; 
 .no-image { position:absolute; top:0; left:0; right:0; bottom:0; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#374151; gap:8px; }
 .no-image-icon { font-size:2.5rem; opacity:0.4; }
 .no-image-text { font-family:'Barlow Condensed',sans-serif; font-size:0.85rem; font-weight:600; letter-spacing:0.12em; opacity:0.5; text-transform:uppercase; }
+.photo-count { position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); color:#d1d5db; font-size:0.7rem; font-weight:700; padding:3px 8px; border-radius:20px; }
+
 .card-body { padding: 16px 18px 18px; }
 .card-maker { font-size:0.65rem; font-weight:700; letter-spacing:0.14em; text-transform:uppercase; color:#f59e0b; margin-bottom:4px; }
-.card-model { font-family:'Barlow Condensed',sans-serif; font-size:1.4rem; font-weight:800; color:#f3f4f6; line-height:1.2; margin-bottom:6px; }
-.card-spec { font-size:0.75rem; color:#6b7280; margin-bottom:14px; line-height:1.5; }
-.badge-row { display:flex; flex-wrap:wrap; gap:6px; margin-top:10px; }
-.badge { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; font-size:0.7rem; font-weight:700; letter-spacing:0.04em; line-height:1; }
+.card-model { font-family:'Barlow Condensed',sans-serif; font-size:1.5rem; font-weight:800; color:#f3f4f6; line-height:1.2; margin-bottom:4px; }
+.card-bucket { font-size:0.72rem; color:#9ca3af; margin-bottom:8px; }
+
+/* 車体仕様タグ（マルチセレクト） */
+.spec-tags { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:12px; }
+.spec-tag { background:rgba(99,102,241,0.15); color:#a5b4fc; border:1px solid rgba(99,102,241,0.25); border-radius:4px; padding:2px 8px; font-size:0.65rem; font-weight:600; letter-spacing:0.04em; }
+
+/* ICTバッジ */
+.badge-section { margin-top:10px; }
+.badge-label { font-size:0.6rem; color:#4b5563; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:6px; font-weight:700; }
+.badge-row { display:flex; flex-wrap:wrap; gap:5px; }
+.badge { display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; font-size:0.68rem; font-weight:700; letter-spacing:0.03em; line-height:1; }
 .badge-yes { background:rgba(16,185,129,0.15); color:#10b981; border:1px solid rgba(16,185,129,0.3); }
-.badge-no { background:rgba(75,85,99,0.2); color:#4b5563; border:1px solid rgba(75,85,99,0.2); }
-.photo-count { position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); color:#d1d5db; font-size:0.7rem; font-weight:700; padding:3px 8px; border-radius:20px; }
+.badge-no  { background:rgba(75,85,99,0.12); color:#374151; border:1px solid rgba(75,85,99,0.15); }
+
+/* 備考・キット */
+.card-meta { margin-top:10px; padding-top:10px; border-top:1px solid #1f2532; display:flex; flex-direction:column; gap:4px; }
+.meta-row { display:flex; gap:6px; align-items:flex-start; font-size:0.7rem; }
+.meta-key { color:#6b7280; font-weight:700; white-space:nowrap; min-width:36px; }
+.meta-val { color:#9ca3af; line-height:1.4; }
+
 .result-count { background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.25); color:#f59e0b; font-family:'Barlow Condensed',sans-serif; font-size:0.85rem; font-weight:600; padding:5px 12px; border-radius:20px; display:inline-block; margin-bottom:16px; }
 .last-updated { font-size:0.65rem; color:#374151; text-align:center; padding:8px; letter-spacing:0.06em; }
 .empty-state { text-align:center; padding:60px 20px; color:#374151; }
 .empty-state-icon { font-size:3rem; }
 .empty-state-msg { font-family:'Barlow Condensed',sans-serif; font-size:1.1rem; font-weight:600; margin-top:12px; letter-spacing:0.06em; text-transform:uppercase; }
+
 .stButton > button { background:linear-gradient(135deg,#f59e0b,#d97706) !important; color:#0f1117 !important; font-family:'Barlow Condensed',sans-serif !important; font-size:1rem !important; font-weight:700 !important; border:none !important; border-radius:10px !important; padding:10px 22px !important; width:100% !important; }
 .stTextInput > div > div > input { background:#1a1f2e !important; border:1.5px solid #2a3146 !important; border-radius:10px !important; color:#e8eaed !important; font-size:1rem !important; padding:12px 16px !important; height:auto !important; }
 .stSelectbox > div > div { background:#1a1f2e !important; border:1.5px solid #2a3146 !important; border-radius:10px !important; color:#e8eaed !important; }
@@ -71,13 +81,10 @@ label[data-testid="stWidgetLabel"] { color:#9ca3af !important; font-size:0.75rem
 
 # ─────────────────────────────────────────
 # Notion API（requests で直接呼ぶ）
-# notion-client ライブラリを一切使わないため
-# バージョン問題を根本から回避する。
 # ─────────────────────────────────────────
 NOTION_VERSION = "2022-06-28"
 
-
-def _notion_headers(token: str) -> dict:
+def _headers(token: str) -> dict:
     return {
         "Authorization": f"Bearer {token}",
         "Notion-Version": NOTION_VERSION,
@@ -87,12 +94,9 @@ def _notion_headers(token: str) -> dict:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_all_records(database_id: str, token: str) -> list:
-    """
-    Notion REST API を requests で直接叩き全レコードを取得。
-    ページネーション対応。S3 URL失効対策として ttl=60秒でキャッシュ。
-    """
+    """ページネーション対応で全レコード取得。TTL=60秒でS3 URL失効を防ぐ。"""
     url     = f"https://api.notion.com/v1/databases/{database_id}/query"
-    headers = _notion_headers(token)
+    headers = _headers(token)
     results = []
     payload = {"page_size": 100}
 
@@ -129,6 +133,17 @@ def get_select(props, key):
     try: return props[key]["select"]["name"] or ""
     except (KeyError, TypeError): return ""
 
+def get_multi_select(props, key):
+    """マルチセレクトのタグ名リストを返す"""
+    try: return [o["name"] for o in props[key]["multi_select"]]
+    except (KeyError, TypeError): return []
+
+def get_number(props, key):
+    try:
+        v = props[key]["number"]
+        return v if v is not None else ""
+    except KeyError: return ""
+
 def get_checkbox(props, key):
     try: return props[key]["checkbox"]
     except KeyError: return False
@@ -151,34 +166,45 @@ def get_files(props, key):
 # ─────────────────────────────────────────
 def parse_record(page: dict) -> dict:
     """
-    【Notionプロパティ名の対応表】
-    実際のプロパティ名に合わせて変更してください。
-    ────────────────────────────────────────
-    "機種名"          → タイトル     (title)
-    "メーカー"        → セレクト     (select)
-    "車体仕様"        → テキスト     (rich_text)
-    "実績写真"        → ファイル     (files)
-    "杭ナビ"         → チェックボックス
-    "ICT建機"        → チェックボックス
-    "マシンガイダンス" → チェックボックス
-    "自動追尾TS"     → チェックボックス
-    "ICTドローン"    → チェックボックス
-    ────────────────────────────────────────
+    【Notionプロパティ名の対応表】← 画面で確認済みの名称
+    ─────────────────────────────────────────────
+    "メーカー"       → select
+    "機種名"         → title
+    "バケット"       → number
+    "車体仕様"       → multi_select  ← タグが複数つく
+    "レトロ"        → checkbox
+    "杭ナビショベル"  → checkbox
+    "ブル3DMC"      → checkbox
+    "転圧システム"   → checkbox
+    "備考"          → rich_text
+    "キット"        → rich_text / select（どちらでも対応）
+    "実績写真"      → files（ファイル&メディア）
+    ─────────────────────────────────────────────
     """
     p = page.get("properties", {})
+
+    # キットはselectかrich_textか判別して取得
+    kit = get_select(p, "キット") or get_rich_text(p, "キット")
+
+    # バケットは数値→文字列化（例: 0.1 → "0.1 m³"）
+    bucket_raw = get_number(p, "バケット")
+    bucket = f"{bucket_raw} m³" if bucket_raw != "" else ""
+
     return {
         "id":     page["id"],
-        "model":  get_title(p, "機種名"),
         "maker":  get_select(p, "メーカー"),
-        "spec":   get_rich_text(p, "車体仕様"),
+        "model":  get_title(p, "機種名"),
+        "bucket": bucket,
+        "specs":  get_multi_select(p, "車体仕様"),   # リスト
         "photos": get_files(p, "実績写真"),
-        "ict_systems": {
-            "杭ナビ":         get_checkbox(p, "杭ナビ"),
-            "ICT建機":        get_checkbox(p, "ICT建機"),
-            "MG":             get_checkbox(p, "マシンガイダンス"),
-            "自動追尾TS":     get_checkbox(p, "自動追尾TS"),
-            "ICTドローン":    get_checkbox(p, "ICTドローン"),
+        "ict": {
+            "レトロ":       get_checkbox(p, "レトロ"),
+            "杭ナビショベル": get_checkbox(p, "杭ナビショベル"),
+            "ブル3DMC":     get_checkbox(p, "ブル3DMC"),
+            "転圧システム":  get_checkbox(p, "転圧システム"),
         },
+        "note": get_rich_text(p, "備考"),
+        "kit":  kit,
     }
 
 
@@ -186,17 +212,46 @@ def parse_record(page: dict) -> dict:
 # カードHTML生成
 # ─────────────────────────────────────────
 def render_card_html(rec: dict) -> str:
+    # 写真エリア
     photos = rec.get("photos", [])
     if photos:
         cnt = f'<div class="photo-count">📷 {len(photos)}</div>' if len(photos) > 1 else ""
-        image_html = f'<div class="card-image-wrap"><img src="{photos[0]}" alt="{rec["model"]}" loading="lazy">{cnt}</div>'
+        image_html = (
+            f'<div class="card-image-wrap">'
+            f'<img src="{photos[0]}" alt="{rec["model"]}" loading="lazy">'
+            f'{cnt}</div>'
+        )
     else:
-        image_html = '<div class="card-image-wrap"><div class="no-image"><div class="no-image-icon">📷</div><div class="no-image-text">NO IMAGE</div></div></div>'
+        image_html = (
+            '<div class="card-image-wrap">'
+            '<div class="no-image">'
+            '<div class="no-image-icon">📷</div>'
+            '<div class="no-image-text">NO IMAGE</div>'
+            '</div></div>'
+        )
 
+    # 車体仕様タグ（マルチセレクト）
+    spec_tags = "".join(
+        f'<span class="spec-tag">{s}</span>' for s in rec.get("specs", [])
+    )
+    spec_html = f'<div class="spec-tags">{spec_tags}</div>' if spec_tags else ""
+
+    # ICTバッジ
     badges = "".join(
         f'<span class="badge {"badge-yes" if ok else "badge-no"}">{"✓" if ok else "—"} {name}</span>'
-        for name, ok in rec["ict_systems"].items()
+        for name, ok in rec["ict"].items()
     )
+
+    # 備考・キット
+    meta_rows = ""
+    if rec.get("note"):
+        meta_rows += f'<div class="meta-row"><span class="meta-key">備考</span><span class="meta-val">{rec["note"]}</span></div>'
+    if rec.get("kit"):
+        meta_rows += f'<div class="meta-row"><span class="meta-key">キット</span><span class="meta-val">{rec["kit"]}</span></div>'
+    meta_html = f'<div class="card-meta">{meta_rows}</div>' if meta_rows else ""
+
+    # バケット
+    bucket_html = f'<div class="card-bucket">バケット容量: {rec["bucket"]}</div>' if rec.get("bucket") else ""
 
     return f"""
 <div class="card">
@@ -205,8 +260,13 @@ def render_card_html(rec: dict) -> str:
   <div class="card-body">
     <div class="card-maker">{rec.get("maker") or "—"}</div>
     <div class="card-model">{rec.get("model") or "（機種名未登録）"}</div>
-    <div class="card-spec">{rec.get("spec") or "仕様情報なし"}</div>
-    <div class="badge-row">{badges}</div>
+    {bucket_html}
+    {spec_html}
+    <div class="badge-section">
+      <div class="badge-label">ICT対応システム</div>
+      <div class="badge-row">{badges}</div>
+    </div>
+    {meta_html}
   </div>
 </div>
 """
@@ -250,7 +310,7 @@ def main():
 
     records = [parse_record(r) for r in raw]
 
-    # 検索UI
+    # ── 検索UI ──
     col_maker, col_search, col_btn = st.columns([2, 3, 1.2])
     makers = sorted({r["maker"] for r in records if r.get("maker")})
 
@@ -263,7 +323,7 @@ def main():
         if st.button("🔄 更新"):
             force_refresh()
 
-    # フィルタ
+    # ── フィルタ ──
     filtered = records
     if selected_maker != "すべて":
         filtered = [r for r in filtered if r.get("maker") == selected_maker]
@@ -271,7 +331,10 @@ def main():
         q = search_query.strip().lower()
         filtered = [r for r in filtered if q in r.get("model", "").lower()]
 
-    st.markdown(f'<div class="result-count">📋 {len(filtered)} 件の実績</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="result-count">📋 {len(filtered)} 件の実績</div>',
+        unsafe_allow_html=True,
+    )
 
     if not filtered:
         st.markdown("""
