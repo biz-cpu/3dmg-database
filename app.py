@@ -328,6 +328,35 @@ def get_notion_client():
 # ─────────────────────────────────────────
 # データ取得（TTL=60秒でキャッシュ）
 # ─────────────────────────────────────────
+def _query_notion_page(notion, database_id: str, start_cursor=None) -> dict:
+    """
+    notion-client の新旧両バージョンに対応したクエリ呼び出し。
+
+    - 新API (notion-client >= 3.x, Notion API 2025-09-03):
+        notion.data_sources.query(data_source_id=...) を使用
+    - 旧API (notion-client 2.x 以前):
+        notion.databases.query(database_id=...) を使用
+
+    まず新APIを試み、AttributeError が発生した場合に旧APIへフォールバック。
+    """
+    kwargs_new = {"data_source_id": database_id, "page_size": 100}
+    kwargs_old = {"database_id": database_id, "page_size": 100}
+
+    if start_cursor:
+        kwargs_new["start_cursor"] = start_cursor
+        kwargs_old["start_cursor"] = start_cursor
+
+    # 新API（notion-client 3.x / Notion API 2025-09-03 以降）
+    if hasattr(notion, "data_sources") and hasattr(notion.data_sources, "query"):
+        try:
+            return notion.data_sources.query(**kwargs_new)
+        except Exception:
+            pass  # 失敗時は旧APIへ
+
+    # 旧API（notion-client 2.x 以前）
+    return notion.databases.query(**kwargs_old)
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_all_records(database_id: str) -> list[dict]:
     """
@@ -341,14 +370,7 @@ def fetch_all_records(database_id: str) -> list[dict]:
     start_cursor = None
 
     while has_more:
-        kwargs = {
-            "database_id": database_id,
-            "page_size": 100,
-        }
-        if start_cursor:
-            kwargs["start_cursor"] = start_cursor
-
-        response = notion.databases.query(**kwargs)
+        response = _query_notion_page(notion, database_id, start_cursor)
         results.extend(response.get("results", []))
         has_more = response.get("has_more", False)
         start_cursor = response.get("next_cursor")
