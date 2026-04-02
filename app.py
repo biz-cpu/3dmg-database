@@ -1,12 +1,13 @@
 """
 ICT施工・取付実績カタログアプリ
-- 画像クリックでライトボックス全画面表示
-- スワイプ・矢印キー・ボタンでスライド閲覧
+- ライトボックスをst.components.v1.htmlで実装（Streamlit iframe制約回避）
 """
 
 import streamlit as st
+import streamlit.components.v1 as components
 import requests
 from datetime import datetime
+import json
 
 st.set_page_config(
     page_title="ICT実績カタログ",
@@ -31,16 +32,12 @@ html, body, .stApp { background: #0f1117 !important; color: #e8eaed !important; 
 .card { background: linear-gradient(160deg, #1a1f2e 0%, #141820 100%); border: 1px solid #1f2532; border-radius: 16px; overflow: hidden; margin-bottom: 20px; position: relative; transition: transform 0.2s, box-shadow 0.2s; }
 .card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(245,158,11,0.25); }
 .card-accent { position: absolute; top: 0; left: 0; right: 0; height: 3px; background: linear-gradient(90deg, #f59e0b, #d97706); }
-
-.card-image-wrap { position: relative; width: 100%; padding-top: 62%; background: #0d111a; overflow: hidden; cursor: pointer; }
-.card-image-wrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s; }
-.card:hover .card-image-wrap img { transform: scale(1.03); }
+.card-image-wrap { position: relative; width: 100%; padding-top: 62%; background: #0d111a; overflow: hidden; }
+.card-image-wrap img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
 .no-image { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #374151; gap: 8px; }
 .no-image-icon { font-size: 2.5rem; opacity: 0.4; }
 .no-image-text { font-family: 'Barlow Condensed', sans-serif; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.12em; opacity: 0.5; text-transform: uppercase; }
-.photo-count { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px); color: #d1d5db; font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; pointer-events: none; }
-.zoom-hint { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); color: #d1d5db; font-size: 0.65rem; padding: 3px 8px; border-radius: 20px; pointer-events: none; opacity: 0; transition: opacity 0.3s; }
-.card-image-wrap:hover .zoom-hint { opacity: 1; }
+.photo-count { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.7); color: #d1d5db; font-size: 0.7rem; font-weight: 700; padding: 3px 8px; border-radius: 20px; pointer-events: none; }
 
 .card-body { padding: 16px 18px 18px; }
 .card-maker { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #f59e0b; margin-bottom: 4px; }
@@ -65,75 +62,6 @@ html, body, .stApp { background: #0f1117 !important; color: #e8eaed !important; 
 .empty-state-icon { font-size: 3rem; }
 .empty-state-msg { font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem; font-weight: 600; margin-top: 12px; text-transform: uppercase; }
 
-/* ── ライトボックス ── */
-.lb-overlay {
-    display: none;
-    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.96);
-    z-index: 99999;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    animation: lbFadeIn 0.2s ease;
-}
-.lb-overlay.active { display: flex; }
-@keyframes lbFadeIn { from { opacity:0 } to { opacity:1 } }
-
-.lb-close {
-    position: absolute; top: 18px; right: 22px;
-    font-size: 2rem; color: #9ca3af; cursor: pointer;
-    background: rgba(255,255,255,0.08); border: none;
-    width: 44px; height: 44px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.2s, color 0.2s;
-    line-height: 1;
-}
-.lb-close:hover { background: rgba(255,255,255,0.18); color: #fff; }
-
-.lb-img-wrap {
-    flex: 1; width: 100%; display: flex; align-items: center; justify-content: center;
-    padding: 60px 80px 20px;
-    position: relative;
-}
-.lb-img-wrap img {
-    max-width: 100%; max-height: 100%;
-    object-fit: contain;
-    border-radius: 8px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.8);
-    transition: opacity 0.25s ease;
-    user-select: none;
-}
-.lb-img-wrap img.fade { opacity: 0; }
-
-.lb-arrow {
-    position: absolute; top: 50%; transform: translateY(-50%);
-    background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
-    color: #d1d5db; font-size: 1.4rem; cursor: pointer;
-    width: 52px; height: 52px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.2s, color 0.2s, transform 0.15s;
-    user-select: none;
-}
-.lb-arrow:hover { background: rgba(245,158,11,0.25); color: #f59e0b; border-color: #f59e0b; }
-.lb-arrow.prev { left: 16px; }
-.lb-arrow.next { right: 16px; }
-.lb-arrow.hidden { opacity: 0; pointer-events: none; }
-
-.lb-footer { padding: 12px 24px 24px; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; }
-.lb-title { font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem; font-weight: 700; color: #f3f4f6; letter-spacing: 0.06em; }
-.lb-counter { font-size: 0.75rem; color: #6b7280; letter-spacing: 0.08em; }
-
-.lb-dots { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; max-width: 300px; }
-.lb-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: #374151; cursor: pointer;
-    transition: background 0.2s, transform 0.15s;
-    border: none;
-}
-.lb-dot.active { background: #f59e0b; transform: scale(1.3); }
-.lb-dot:hover { background: #9ca3af; }
-
-/* Streamlit UI上書き */
 .stButton > button { background: linear-gradient(135deg, #f59e0b, #d97706) !important; color: #0f1117 !important; font-family: 'Barlow Condensed', sans-serif !important; font-size: 1rem !important; font-weight: 700 !important; border: none !important; border-radius: 10px !important; padding: 10px 22px !important; width: 100% !important; }
 .stTextInput > div > div > input { background: #1a1f2e !important; border: 1.5px solid #2a3146 !important; border-radius: 10px !important; color: #e8eaed !important; font-size: 1rem !important; padding: 12px 16px !important; height: auto !important; }
 .stSelectbox > div > div { background: #1a1f2e !important; border: 1.5px solid #2a3146 !important; border-radius: 10px !important; color: #e8eaed !important; }
@@ -143,135 +71,7 @@ section[data-testid="stSidebar"] { display: none !important; }
 label[data-testid="stWidgetLabel"] { color: #9ca3af !important; font-size: 0.75rem !important; letter-spacing: 0.08em !important; text-transform: uppercase !important; }
 </style>
 """
-
-LIGHTBOX_JS = """
-<script>
-(function() {
-  // 複数回実行防止
-  if (window._lbReady) return;
-  window._lbReady = true;
-
-  // ── 状態 ──
-  let photos = [];
-  let current = 0;
-  let title = "";
-  let startX = 0;
-
-  // ── DOM ──
-  const overlay = document.createElement("div");
-  overlay.className = "lb-overlay";
-  overlay.id = "lb-overlay";
-  overlay.innerHTML = `
-    <button class="lb-close" id="lb-close" aria-label="閉じる">✕</button>
-    <div class="lb-img-wrap" id="lb-img-wrap">
-      <button class="lb-arrow prev" id="lb-prev" aria-label="前へ">&#8249;</button>
-      <img id="lb-img" src="" alt="" draggable="false">
-      <button class="lb-arrow next" id="lb-next" aria-label="次へ">&#8250;</button>
-    </div>
-    <div class="lb-footer">
-      <div class="lb-title" id="lb-title"></div>
-      <div class="lb-counter" id="lb-counter"></div>
-      <div class="lb-dots" id="lb-dots"></div>
-    </div>
-  `;
-  document.body.appendChild(overlay);
-
-  const img      = document.getElementById("lb-img");
-  const titleEl  = document.getElementById("lb-title");
-  const counter  = document.getElementById("lb-counter");
-  const dotsWrap = document.getElementById("lb-dots");
-  const btnPrev  = document.getElementById("lb-prev");
-  const btnNext  = document.getElementById("lb-next");
-
-  function buildDots() {
-    dotsWrap.innerHTML = "";
-    if (photos.length <= 1) return;
-    photos.forEach((_, i) => {
-      const d = document.createElement("button");
-      d.className = "lb-dot" + (i === current ? " active" : "");
-      d.setAttribute("aria-label", (i+1) + "枚目");
-      d.onclick = () => goTo(i);
-      dotsWrap.appendChild(d);
-    });
-  }
-
-  function updateUI() {
-    counter.textContent = photos.length > 1 ? ((current+1) + " / " + photos.length) : "";
-    titleEl.textContent = title;
-    btnPrev.classList.toggle("hidden", current === 0);
-    btnNext.classList.toggle("hidden", current === photos.length - 1);
-    // ドット更新
-    dotsWrap.querySelectorAll(".lb-dot").forEach((d, i) => {
-      d.className = "lb-dot" + (i === current ? " active" : "");
-    });
-  }
-
-  function goTo(idx) {
-    if (idx < 0 || idx >= photos.length) return;
-    img.classList.add("fade");
-    setTimeout(() => {
-      current = idx;
-      img.src = photos[current];
-      img.onload = () => img.classList.remove("fade");
-      img.onerror = () => img.classList.remove("fade");
-      updateUI();
-    }, 200);
-  }
-
-  function open(urlsJson, startIdx, modelTitle) {
-    photos = JSON.parse(urlsJson);
-    current = startIdx || 0;
-    title = modelTitle || "";
-    img.src = photos[current];
-    buildDots();
-    updateUI();
-    overlay.classList.add("active");
-    document.body.style.overflow = "hidden";
-  }
-
-  function close() {
-    overlay.classList.remove("active");
-    document.body.style.overflow = "";
-    img.src = "";
-    photos = [];
-  }
-
-  // グローバル公開
-  window.lbOpen  = open;
-  window.lbClose = close;
-  window.lbPrev  = () => goTo(current - 1);
-  window.lbNext  = () => goTo(current + 1);
-
-  // ── イベント ──
-  document.getElementById("lb-close").onclick = close;
-  btnPrev.onclick = () => goTo(current - 1);
-  btnNext.onclick = () => goTo(current + 1);
-
-  // オーバーレイ背景クリックで閉じる
-  overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
-
-  // キーボード
-  document.addEventListener("keydown", e => {
-    if (!overlay.classList.contains("active")) return;
-    if (e.key === "ArrowLeft")  goTo(current - 1);
-    if (e.key === "ArrowRight") goTo(current + 1);
-    if (e.key === "Escape")     close();
-  });
-
-  // スワイプ（タッチ）
-  overlay.addEventListener("touchstart", e => { startX = e.touches[0].clientX; }, { passive: true });
-  overlay.addEventListener("touchend", e => {
-    const dx = e.changedTouches[0].clientX - startX;
-    if (Math.abs(dx) < 40) return;
-    dx < 0 ? goTo(current + 1) : goTo(current - 1);
-  });
-
-})();
-</script>
-"""
-
 st.markdown(CSS, unsafe_allow_html=True)
-st.markdown(LIGHTBOX_JS, unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────
@@ -304,7 +104,6 @@ def fetch_all_records(database_id, token):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def fetch_page_images(page_id, token):
-    """ページ本文（子ブロック）の image ブロックURLを全取得"""
     headers = _headers(token)
     urls    = []
     cursor  = None
@@ -369,12 +168,8 @@ def get_files_prop(p, k):
         return urls
     except (KeyError, TypeError): return []
 
-
-# ─────────────────────────────────────────
-# レコードをパース
-# ─────────────────────────────────────────
 def parse_record(page):
-    p = page.get("properties", {})
+    p   = page.get("properties", {})
     kit = get_select(p, "キット") or get_rich_text(p, "キット")
     bv  = get_number(p, "バケット")
     return {
@@ -396,66 +191,273 @@ def parse_record(page):
 
 
 # ─────────────────────────────────────────
-# カードHTML（ライトボックス対応）
+# ライトボックス付きグリッドを
+# st.components.v1.html で丸ごとレンダリング
+# （Streamlit の iframe 制約を回避）
 # ─────────────────────────────────────────
-def render_card_html(rec, photos):
-    import json as _json
-    model_esc = rec["model"].replace("'", "\\'").replace('"', '&quot;')
+def render_gallery_component(records_with_photos):
+    """
+    records_with_photos: list of (rec_dict, photos_list)
+    全カードとライトボックスを1つのHTMLコンポーネントとして出力。
+    """
 
-    if photos:
-        # JSON配列をHTML属性に埋め込む（シングルクォートエスケープ）
-        urls_json = _json.dumps(photos, ensure_ascii=False).replace("'", "\\'")
-        cnt_html  = ('<div class="photo-count">📷 ' + str(len(photos)) + '</div>') if len(photos) > 1 else ""
-        hint_html = '<div class="zoom-hint">🔍 タップで拡大</div>'
-        onclick   = "lbOpen('" + urls_json + "', 0, '" + model_esc + "')"
-        image_html = (
-            '<div class="card-image-wrap" onclick="' + onclick + '" role="button" tabindex="0">'
-            + '<img src="' + photos[0] + '" alt="' + model_esc + '" loading="lazy">'
-            + hint_html + cnt_html
-            + '</div>'
+    # カードHTML断片を構築
+    cards_html = ""
+    all_photo_data = []   # [{model, photos}, ...]
+
+    for idx, (rec, photos) in enumerate(records_with_photos):
+        all_photo_data.append({
+            "model":  rec.get("model", ""),
+            "photos": photos,
+        })
+
+        # 写真エリア
+        if photos:
+            cnt = ('<span class="photo-count">📷 ' + str(len(photos)) + '</span>') if len(photos) > 1 else ""
+            image_html = (
+                '<div class="card-image-wrap" onclick="lbOpen(' + str(idx) + ')" title="クリックで拡大">'
+                + '<img src="' + photos[0] + '" alt="" loading="lazy">'
+                + '<span class="zoom-hint">🔍 拡大</span>'
+                + cnt
+                + '</div>'
+            )
+        else:
+            image_html = (
+                '<div class="card-image-wrap no-click">'
+                '<div class="no-image">'
+                '<div class="no-image-icon">📷</div>'
+                '<div class="no-image-text">NO IMAGE</div>'
+                '</div></div>'
+            )
+
+        spec_inner = "".join('<span class="spec-tag">' + s + '</span>' for s in rec.get("specs", []))
+        spec_html  = ('<div class="spec-tags">' + spec_inner + '</div>') if spec_inner else ""
+
+        badge_inner = ""
+        for name, ok in rec["ict"].items():
+            cls  = "badge badge-yes" if ok else "badge badge-no"
+            mark = "✓" if ok else "—"
+            badge_inner += '<span class="' + cls + '">' + mark + " " + name + "</span>"
+
+        meta_inner = ""
+        if rec.get("note"):
+            meta_inner += '<div class="meta-row"><span class="meta-key">備考</span><span class="meta-val">' + rec["note"] + "</span></div>"
+        if rec.get("kit"):
+            meta_inner += '<div class="meta-row"><span class="meta-key">キット</span><span class="meta-val">' + rec["kit"] + "</span></div>"
+
+        bucket_html = ('<div class="card-bucket">バケット容量: ' + rec["bucket"] + "</div>") if rec.get("bucket") else ""
+        meta_html   = ('<div class="card-meta">' + meta_inner + "</div>") if meta_inner else ""
+
+        cards_html += (
+            '<div class="card">'
+            '<div class="card-accent"></div>'
+            + image_html +
+            '<div class="card-body">'
+            '<div class="card-maker">' + (rec.get("maker") or "—") + "</div>"
+            '<div class="card-model">' + (rec.get("model") or "（機種名未登録）") + "</div>"
+            + bucket_html + spec_html +
+            '<div class="badge-section">'
+            '<div class="badge-label">ICT対応システム</div>'
+            '<div class="badge-row">' + badge_inner + "</div>"
+            "</div>"
+            + meta_html +
+            "</div></div>"
         )
-    else:
-        image_html = (
-            '<div class="card-image-wrap">'
-            '<div class="no-image">'
-            '<div class="no-image-icon">📷</div>'
-            '<div class="no-image-text">NO IMAGE</div>'
-            '</div></div>'
-        )
 
-    spec_inner = "".join('<span class="spec-tag">' + s + '</span>' for s in rec.get("specs", []))
-    spec_html  = ('<div class="spec-tags">' + spec_inner + '</div>') if spec_inner else ""
+    # Python側でJSONを生成してHTMLに埋め込む
+    photo_data_json = json.dumps(all_photo_data, ensure_ascii=False)
 
-    badge_inner = ""
-    for name, ok in rec["ict"].items():
-        cls  = "badge badge-yes" if ok else "badge badge-no"
-        mark = "✓" if ok else "—"
-        badge_inner += '<span class="' + cls + '">' + mark + " " + name + '</span>'
-    badge_html = (
-        '<div class="badge-section">'
-        '<div class="badge-label">ICT対応システム</div>'
-        '<div class="badge-row">' + badge_inner + '</div>'
-        '</div>'
-    )
+    # 行数に応じた高さ（カード1行 ≒ 520px、3列グリッド）
+    n_rows = max(1, -(-len(records_with_photos) // 3))
+    height = n_rows * 560 + 80
 
-    meta_inner = ""
-    if rec.get("note"):
-        meta_inner += '<div class="meta-row"><span class="meta-key">備考</span><span class="meta-val">' + rec["note"] + '</span></div>'
-    if rec.get("kit"):
-        meta_inner += '<div class="meta-row"><span class="meta-key">キット</span><span class="meta-val">' + rec["kit"] + '</span></div>'
-    meta_html   = ('<div class="card-meta">' + meta_inner + '</div>') if meta_inner else ""
-    bucket_html = ('<div class="card-bucket">バケット容量: ' + rec["bucket"] + '</div>') if rec.get("bucket") else ""
+    html = """<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700;900&family=Barlow+Condensed:wght@600;800&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f1117;color:#e8eaed;font-family:'Noto Sans JP',sans-serif;padding:4px 0 12px;}
 
-    return (
-        '<div class="card">'
-        '<div class="card-accent"></div>'
-        + image_html +
-        '<div class="card-body">'
-        '<div class="card-maker">' + (rec.get("maker") or "—") + '</div>'
-        '<div class="card-model">' + (rec.get("model") or "（機種名未登録）") + '</div>'
-        + bucket_html + spec_html + badge_html + meta_html +
-        '</div></div>'
-    )
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+@media(max-width:700px){.grid{grid-template-columns:1fr;}}
+@media(min-width:701px) and (max-width:1000px){.grid{grid-template-columns:repeat(2,1fr);}}
+
+.card{background:linear-gradient(160deg,#1a1f2e 0%,#141820 100%);border:1px solid #1f2532;border-radius:16px;overflow:hidden;position:relative;transition:transform .2s,box-shadow .2s;}
+.card:hover{transform:translateY(-3px);box-shadow:0 12px 32px rgba(0,0,0,.5),0 0 0 1px rgba(245,158,11,.25);}
+.card-accent{position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#f59e0b,#d97706);}
+
+.card-image-wrap{position:relative;width:100%;padding-top:62%;background:#0d111a;overflow:hidden;cursor:pointer;}
+.card-image-wrap.no-click{cursor:default;}
+.card-image-wrap img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transition:transform .4s;}
+.card:hover .card-image-wrap img{transform:scale(1.04);}
+.no-image{position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#374151;gap:8px;}
+.no-image-icon{font-size:2.5rem;opacity:.4;}
+.no-image-text{font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:600;letter-spacing:.12em;opacity:.5;text-transform:uppercase;}
+.zoom-hint{position:absolute;top:10px;left:10px;background:rgba(0,0,0,.65);color:#d1d5db;font-size:.65rem;padding:3px 8px;border-radius:20px;opacity:0;transition:opacity .25s;pointer-events:none;}
+.card-image-wrap:hover .zoom-hint{opacity:1;}
+.photo-count{position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,.7);color:#d1d5db;font-size:.7rem;font-weight:700;padding:3px 8px;border-radius:20px;pointer-events:none;}
+
+.card-body{padding:14px 16px 16px;}
+.card-maker{font-size:.65rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#f59e0b;margin-bottom:4px;}
+.card-model{font-family:'Barlow Condensed',sans-serif;font-size:1.45rem;font-weight:800;color:#f3f4f6;line-height:1.2;margin-bottom:4px;}
+.card-bucket{font-size:.72rem;color:#9ca3af;margin-bottom:8px;}
+.spec-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px;}
+.spec-tag{background:rgba(99,102,241,.15);color:#a5b4fc;border:1px solid rgba(99,102,241,.25);border-radius:4px;padding:2px 8px;font-size:.65rem;font-weight:600;}
+.badge-section{margin-top:8px;}
+.badge-label{font-size:.6rem;color:#4b5563;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px;font-weight:700;}
+.badge-row{display:flex;flex-wrap:wrap;gap:4px;}
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:6px;font-size:.67rem;font-weight:700;line-height:1;}
+.badge-yes{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3);}
+.badge-no{background:rgba(75,85,99,.12);color:#374151;border:1px solid rgba(75,85,99,.15);}
+.card-meta{margin-top:10px;padding-top:10px;border-top:1px solid #1f2532;display:flex;flex-direction:column;gap:4px;}
+.meta-row{display:flex;gap:6px;align-items:flex-start;font-size:.7rem;}
+.meta-key{color:#6b7280;font-weight:700;white-space:nowrap;min-width:36px;}
+.meta-val{color:#9ca3af;line-height:1.4;}
+
+/* ── ライトボックス ── */
+#lb{display:none;position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:9999;flex-direction:column;align-items:center;justify-content:center;}
+#lb.on{display:flex;}
+
+#lb-close{position:absolute;top:16px;right:18px;width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.1);border:none;color:#9ca3af;font-size:1.4rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,color .2s;z-index:10;}
+#lb-close:hover{background:rgba(255,255,255,.22);color:#fff;}
+
+.lb-stage{flex:1;width:100%;display:flex;align-items:center;justify-content:center;position:relative;padding:60px 70px 10px;min-height:0;}
+.lb-stage img{max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;box-shadow:0 20px 60px rgba(0,0,0,.8);transition:opacity .22s ease;user-select:none;display:block;}
+.lb-stage img.fade{opacity:0;}
+
+.lb-arrow{position:absolute;top:50%;transform:translateY(-50%);width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.14);color:#d1d5db;font-size:1.5rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,color .2s,border-color .2s;user-select:none;}
+.lb-arrow:hover{background:rgba(245,158,11,.3);color:#f59e0b;border-color:#f59e0b;}
+.lb-arrow.hide{opacity:0;pointer-events:none;}
+#lb-prev{left:12px;}
+#lb-next{right:12px;}
+
+.lb-foot{padding:10px 20px 20px;display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;}
+.lb-title{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:#f3f4f6;letter-spacing:.06em;}
+.lb-counter{font-size:.75rem;color:#6b7280;letter-spacing:.08em;}
+.lb-dots{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;max-width:340px;}
+.lb-dot{width:9px;height:9px;border-radius:50%;background:#374151;border:none;cursor:pointer;transition:background .2s,transform .15s;}
+.lb-dot.on{background:#f59e0b;transform:scale(1.35);}
+</style>
+</head>
+<body>
+
+<div class="grid">
+CARDS_PLACEHOLDER
+</div>
+
+<!-- ライトボックス -->
+<div id="lb">
+  <button id="lb-close" aria-label="閉じる">&#x2715;</button>
+  <div class="lb-stage">
+    <button class="lb-arrow hide" id="lb-prev" aria-label="前へ">&#8249;</button>
+    <img id="lb-img" src="" alt="">
+    <button class="lb-arrow hide" id="lb-next" aria-label="次へ">&#8250;</button>
+  </div>
+  <div class="lb-foot">
+    <div class="lb-title" id="lb-title"></div>
+    <div class="lb-counter" id="lb-counter"></div>
+    <div class="lb-dots" id="lb-dots"></div>
+  </div>
+</div>
+
+<script>
+var DATA = PHOTO_DATA_PLACEHOLDER;
+
+var lb      = document.getElementById('lb');
+var lbImg   = document.getElementById('lb-img');
+var lbTitle = document.getElementById('lb-title');
+var lbCnt   = document.getElementById('lb-counter');
+var lbDots  = document.getElementById('lb-dots');
+var btnPrev = document.getElementById('lb-prev');
+var btnNext = document.getElementById('lb-next');
+
+var cur = 0;
+var photos = [];
+
+function buildDots(){
+  lbDots.innerHTML = '';
+  if(photos.length <= 1) return;
+  photos.forEach(function(_, i){
+    var d = document.createElement('button');
+    d.className = 'lb-dot' + (i===cur?' on':'');
+    d.onclick = function(){ goTo(i); };
+    lbDots.appendChild(d);
+  });
+}
+
+function updateUI(){
+  lbTitle.textContent = DATA[window._lbIdx] ? DATA[window._lbIdx].model : '';
+  lbCnt.textContent   = photos.length > 1 ? (cur+1) + ' / ' + photos.length : '';
+  btnPrev.className   = 'lb-arrow' + (cur===0 ? ' hide' : '');
+  btnNext.className   = 'lb-arrow' + (cur===photos.length-1 ? ' hide' : '');
+  lbDots.querySelectorAll('.lb-dot').forEach(function(d,i){
+    d.className = 'lb-dot' + (i===cur?' on':'');
+  });
+}
+
+function goTo(idx){
+  if(idx < 0 || idx >= photos.length) return;
+  lbImg.classList.add('fade');
+  setTimeout(function(){
+    cur = idx;
+    lbImg.src = photos[cur];
+    lbImg.onload = function(){ lbImg.classList.remove('fade'); };
+    lbImg.onerror = function(){ lbImg.classList.remove('fade'); };
+    updateUI();
+  }, 200);
+}
+
+function lbOpen(idx){
+  var d = DATA[idx];
+  if(!d || !d.photos || d.photos.length === 0) return;
+  window._lbIdx = idx;
+  photos = d.photos;
+  cur = 0;
+  lbImg.src = photos[0];
+  buildDots();
+  updateUI();
+  lb.classList.add('on');
+  document.body.style.overflow = 'hidden';
+}
+
+function lbClose(){
+  lb.classList.remove('on');
+  document.body.style.overflow = '';
+  lbImg.src = '';
+}
+
+document.getElementById('lb-close').onclick = lbClose;
+btnPrev.onclick = function(){ goTo(cur-1); };
+btnNext.onclick = function(){ goTo(cur+1); };
+lb.addEventListener('click', function(e){ if(e.target===lb) lbClose(); });
+
+document.addEventListener('keydown', function(e){
+  if(!lb.classList.contains('on')) return;
+  if(e.key==='ArrowLeft')  goTo(cur-1);
+  if(e.key==='ArrowRight') goTo(cur+1);
+  if(e.key==='Escape')     lbClose();
+});
+
+var sx=0;
+lb.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;},{passive:true});
+lb.addEventListener('touchend',function(e){
+  var dx=e.changedTouches[0].clientX-sx;
+  if(Math.abs(dx)<40) return;
+  dx<0?goTo(cur+1):goTo(cur-1);
+});
+</script>
+</body>
+</html>
+"""
+
+    html = html.replace("CARDS_PLACEHOLDER", cards_html)
+    html = html.replace("PHOTO_DATA_PLACEHOLDER", photo_data_json)
+
+    components.html(html, height=height, scrolling=True)
 
 
 # ─────────────────────────────────────────
@@ -521,13 +523,16 @@ def main():
         )
         return
 
-    for row in [filtered[i:i+3] for i in range(0, len(filtered), 3)]:
-        cols = st.columns(3, gap="medium")
-        for col, rec in zip(cols, row):
-            with col:
-                page_imgs  = fetch_page_images(rec["id"], token)
-                all_photos = rec["photos_prop"] + [u for u in page_imgs if u not in rec["photos_prop"]]
-                st.markdown(render_card_html(rec, all_photos), unsafe_allow_html=True)
+    # 写真を統合
+    records_with_photos = []
+    with st.spinner("写真を読み込み中..."):
+        for rec in filtered:
+            page_imgs  = fetch_page_images(rec["id"], token)
+            all_photos = rec["photos_prop"] + [u for u in page_imgs if u not in rec["photos_prop"]]
+            records_with_photos.append((rec, all_photos))
+
+    # ライトボックス付きグリッドを1コンポーネントで描画
+    render_gallery_component(records_with_photos)
 
     st.markdown(
         '<div class="last-updated">最終更新: '
