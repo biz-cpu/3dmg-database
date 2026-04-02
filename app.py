@@ -99,9 +99,48 @@ def get_multi_select(p,k):
     try: return [o["name"] for o in p[k]["multi_select"]]
     except: return []
 def get_number(p,k):
+    """numberプロパティから数値を返す"""
     try:
         v=p[k]["number"]; return v if v is not None else ""
     except: return ""
+
+def get_bucket_value(p, k):
+    """
+    バケットプロパティをどの型でも取得する。
+    Notionでは number / rich_text / select / formula のいずれかで設定される。
+    取得した値を float に変換して返す（失敗時は None）。
+    """
+    prop = p.get(k)
+    if prop is None:
+        return None
+    ptype = prop.get("type", "")
+
+    raw = None
+    if ptype == "number":
+        raw = prop.get("number")
+    elif ptype == "rich_text":
+        items = prop.get("rich_text", [])
+        raw = items[0]["plain_text"] if items else None
+    elif ptype == "select":
+        sel = prop.get("select")
+        raw = sel["name"] if sel else None
+    elif ptype == "formula":
+        formula = prop.get("formula", {})
+        ftype = formula.get("type", "")
+        if ftype == "number":
+            raw = formula.get("number")
+        elif ftype == "string":
+            raw = formula.get("string")
+    elif ptype == "text":
+        items = prop.get("text", [])
+        raw = items[0]["plain_text"] if items else None
+
+    if raw is None:
+        return None
+    try:
+        return float(str(raw).replace(",", ".").strip())
+    except (ValueError, TypeError):
+        return None
 def get_checkbox(p,k):
     try: return p[k]["checkbox"]
     except: return False
@@ -118,14 +157,14 @@ def get_files_prop(p,k):
 def parse_record(page):
     p   = page.get("properties",{})
     kit = get_select(p,"キット") or get_rich_text(p,"キット")
-    bv  = get_number(p,"バケット")   # 数値そのまま（例: 0.1）
+    # バケット: number/rich_text/select/formula すべてに対応
+    bv = get_bucket_value(p, "バケット")   # float or None
 
-    # 表示用ラベル: Notionの数値をそのまま文字列化（0.10→"0.1"、1.0→"1"）
-    if bv != "":
+    if bv is not None:
         try:
-            fv = float(bv)
-            bucket_label = (str(int(fv)) if fv == int(fv) else
-                            str(fv).rstrip("0").rstrip(".")) + " m³"
+            # 小数点以下の末尾ゼロを除去（0.10→"0.1"、1.0→"1"）
+            bucket_label = (str(int(bv)) if bv == int(bv) else
+                            ("{:.10f}".format(bv)).rstrip("0").rstrip(".")) + " m³"
         except Exception:
             bucket_label = str(bv) + " m³"
     else:
@@ -136,7 +175,7 @@ def parse_record(page):
         "maker":        get_select(p,"メーカー"),
         "model":        get_title(p,"機種名"),
         "bucket":       bucket_label,
-        "bucket_num":   float(bv) if bv != "" else None,
+        "bucket_num":   bv,  # float or None（ソート・フィルタ用）
         "specs":        get_multi_select(p,"車体仕様"),
         "photos_prop":  get_files_prop(p,"実績写真"),
         "ict":{
@@ -489,15 +528,37 @@ def main():
 
     makers = sorted({r["maker"] for r in records if r.get("maker")})
 
-    # バケットサイズ: Notionの実際の数値をそのまま昇順で並べる
+    # バケットサイズ: bucket_num（float）で正確にソート
+    # label→num の逆引きマップを作成
+    bucket_label_to_num = {
+        r["bucket"]: r["bucket_num"]
+        for r in records
+        if r.get("bucket") and r.get("bucket_num") is not None
+    }
     bucket_set = sorted(
         {r["bucket"] for r in records if r.get("bucket")},
-        key=lambda x: (
-            float(x.replace(" m³", "").replace(" m3", ""))
-            if x.replace(" m³", "").replace(" m3", "").replace(".", "", 1).isdigit()
-            else 0.0
-        ),
+        key=lambda x: bucket_label_to_num.get(x, 0.0),
     )
+
+    # ── デバッグ情報（バケット取得に問題があるとき用）──
+    with st.sidebar:
+        st.markdown("### 🔧 デバッグ情報")
+        st.write(f"総レコード数: {len(records)}")
+        bucket_filled = [r for r in records if r.get("bucket")]
+        st.write(f"バケット取得数: {len(bucket_filled)} / {len(records)}")
+        if bucket_set:
+            st.write("バケット一覧:", bucket_set)
+        else:
+            st.warning("バケット値が取得できていません。Notionのプロパティ名・型を確認してください。")
+            # 最初の1件のプロパティキー一覧を表示
+            if raw:
+                first_props = list(raw[0].get("properties", {}).keys())
+                st.write("Notionのプロパティ名一覧:", first_props)
+                # バケット候補プロパティの型を表示
+                for key in first_props:
+                    prop = raw[0]["properties"][key]
+                    if prop.get("type") in ("number","rich_text","select","formula"):
+                        st.write(f"  {key!r}: type={prop['type']!r}, raw={str(prop)[:120]}")
 
     with col_maker:
         selected_maker = st.selectbox("🏭 メーカー", ["すべて"] + makers)
