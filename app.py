@@ -471,10 +471,23 @@ def main():
 
     records = [parse_record(r) for r in raw]
 
-    col_maker, col_search, col_btn = st.columns([2, 3, 1.2])
+    col_maker, col_bucket, col_search, col_btn = st.columns([2, 1.5, 2.5, 1])
+
     makers = sorted({r["maker"] for r in records if r.get("maker")})
+
+    # バケットサイズ一覧（数値順ソート）
+    def _bucket_sort_key(x):
+        try: return float(x.replace(" m3", ""))
+        except: return 0.0
+    bucket_set = sorted(
+        {r["bucket"] for r in records if r.get("bucket")},
+        key=_bucket_sort_key,
+    )
+
     with col_maker:
         selected_maker = st.selectbox("メーカー", ["すべて"] + makers)
+    with col_bucket:
+        selected_bucket = st.selectbox("バケット", ["すべて"] + bucket_set)
     with col_search:
         search_query = st.text_input("機種名で検索", placeholder="例: PC200, ZX135...")
     with col_btn:
@@ -484,6 +497,8 @@ def main():
     filtered = records
     if selected_maker != "すべて":
         filtered = [r for r in filtered if r.get("maker") == selected_maker]
+    if selected_bucket != "すべて":
+        filtered = [r for r in filtered if r.get("bucket") == selected_bucket]
     if search_query.strip():
         q = search_query.strip().lower()
         filtered = [r for r in filtered if q in r.get("model","").lower()]
